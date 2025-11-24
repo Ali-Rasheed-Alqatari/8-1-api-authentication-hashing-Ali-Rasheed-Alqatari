@@ -305,6 +305,67 @@ app.post("/login", async (req, res) => {
 // =========================
 app.get("/weather", async (req, res) => {
   // Implement logic here based on the TODO 3.
+
+  try {
+    const auth = req.headers.authorization;
+    if (!auth) {
+      return res.status(401).json({ error: "Missing token" });
+    }
+    const parts = auth.split(" ");
+    if (parts.length !== 2 || parts[0] !== "Bearer") {
+        return res.status(401).json({ error: "Invalid token format. Must be 'Bearer <token>'" });
+    }
+    const token = parts[1];
+
+    // 3) Verify token
+    try {
+      jwt.verify(token, JWT_SECRET); } 
+      catch (e) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const city = req.query.city;
+    if (!city) {
+      return res.status(400).json({ error: "City required" });
+    }
+
+    // 5) Prepare external weather API URL
+    const url = `https://goweather.herokuapp.com/weather/${encodeURIComponent(city)}`;
+
+    // 6) Use fetch() to call API
+    const weatherResponse = await fetch(url);
+
+    if (!weatherResponse.ok) {
+      // Try to parse error message if available, otherwise return generic error
+      try {
+        const errorData = await weatherResponse.json();
+        console.error("External weather API error:", errorData);
+      } catch (e) {
+        // If parsing fails, just log the status
+        console.error("External weather API non-JSON error status:", weatherResponse.status);
+      }
+      return res.status(502).json({ error: "Error contacting external weather API" }); 
+      // Using 502 Bad Gateway for external service error
+    }
+
+    // 7) Parse JSON
+    const data = await weatherResponse.json();
+
+    // 8) Return structured weather data
+    return res.json({
+      city,
+      temp: data.temperature,
+      description: data.description,
+      wind: data.wind,
+      raw: data  // full API response
+    });
+  } catch (err) {
+
+    console.error("Weather fetch error:", err);
+
+    return res.status(500).json({ error: "Server error during weather fetch" });
+  }
+
 });
 
 // Start server
